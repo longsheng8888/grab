@@ -1,4 +1,8 @@
 #import <UIKit/UIKit.h>
 
-@interface GrabPrefsRootListController : UIViewController
+@interface PSViewController : UIViewController
+@end
+
+@interface GrabPrefsRootListController : PSViewController
+- (void)savePrefs;
 @end
