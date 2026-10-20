@@ -4,6 +4,6 @@
         cell = PSLinkCell;
         detail = "GrabPrefsRootListController";
         icon = "icon.png";
-        label = "自动抢单";
+        label = "小龙生自动抢单";
     };
 }
