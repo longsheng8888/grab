@@ -3,92 +3,182 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
-static NSMutableSet *gPushIds = nil;
-static int gLock = 0;
+// ===== 偏好 =====
+#define PREFS_DOMAIN  "com.yourname.grab"
+#define PREFS_NOTIFY  "com.yourname.grab.prefs.changed"
 
+static BOOL   gEnabled  = YES;
+static BOOL   gPushOnly = YES;
+static double gMinYuan  = 20.0;
+static double gMaxKm    = 5.0;
+static double gMinCoin  = 0.0;
+
+static NSMutableDictionary<NSString *, NSNumber *> *gPushIds = nil;
+static os_unfair_lock gLockObj = OS_UNFAIR_LOCK_INIT;
+static BOOL gGrabbing = NO;
+static const int kPushTTL = 300;
+
+static inline void L(NSString *fmt, ...) {
+    va_list ap; va_start(ap, fmt);
+    NSString *s = [[NSString alloc] initWithFormat:fmt arguments:ap];
+    va_end(ap);
+    NSLog(@"[grab] %@", s);
+}
+
+static NSString *PrefsPath(void) {
+    // roothide 越狱路径在 /var/mobile/Library/Preferences/ 下，App 沙盒内可读
+    return [NSString stringWithFormat:@"/var/mobile/Library/Preferences/%s.plist", PREFS_DOMAIN];
+}
+
+static void ReloadPrefs(void) {
+    NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:PrefsPath()];
+    if (d) {
+        if (d[@"enabled"])  gEnabled  = [d[@"enabled"]  boolValue];
+        if (d[@"pushOnly"]) gPushOnly = [d[@"pushOnly"] boolValue];
+        if (d[@"minYuan"])  gMinYuan  = [d[@"minYuan"]  doubleValue];
+        if (d[@"maxKm"])    gMaxKm    = [d[@"maxKm"]    doubleValue];
+        if (d[@"minCoin"])  gMinCoin  = [d[@"minCoin"]  doubleValue];
+    }
+    L(@"配置 enabled=%d pushOnly=%d minYuan=%.1f maxKm=%.1f minCoin=%.1f",
+      gEnabled, gPushOnly, gMinYuan, gMaxKm, gMinCoin);
+}
+
+static void PrefsChangedCB(CFNotificationCenterRef c, CFStringRef n, const void *o,
+                           CFStringRef nm, const void *i) {
+    ReloadPrefs();
+}
+
+%ctor {
+    ReloadPrefs();
+    CFNotificationCenterAddObserver(
+        CFNotificationCenterGetDarwinNotifyCenter(), NULL,
+        PrefsChangedCB, CFSTR(PREFS_NOTIFY), NULL,
+        CFNotificationSuspensionBehaviorDeliverImmediately);
+}
+
+// ===== 安全取值 =====
 static id SafeValue(id obj, NSString *key) {
-    if (!obj) return nil;
+    if (!obj || !key) return nil;
     @try {
-        SEL sel = NSSelectorFromString([key stringByAppendingString:@":"]);
+        SEL sel = NSSelectorFromString(key);
         if ([obj respondsToSelector:sel]) {
             #pragma clang diagnostic push
             #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-            return [obj performSelector:sel withObject:nil];
-            #pragma clang diagnostic pop
-        }
-        SEL sel2 = NSSelectorFromString([key stringByAppendingString:@"_"]);
-        if ([obj respondsToSelector:sel2]) {
-            #pragma clang diagnostic push
-            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-            return [obj performSelector:sel2];
+            return [obj performSelector:sel];
             #pragma clang diagnostic pop
         }
         return [obj valueForKey:key];
     } @catch (__unused NSException *e) { return nil; }
 }
 
-static void DoGrab(id order, NSString *freightNo) {
-    Class P = objc_getClass("HLLOrderPickupPresenter");
-    if (!P) return;
-    id presenter = ((id (*)(id, SEL, id))objc_msgSend)([P alloc], sel_registerName("initWithOrder:"), order);
-    if (!presenter) return;
-
-    __block id blockRef = nil;
-    void (^cb)(id) = ^(id resp) {
-        gLock = 0;
-        blockRef = nil;
-        NSLog(@"[grab] 抢单回调成功: %@", freightNo);
-    };
-    blockRef = [cb copy];
-
-    SEL sel = sel_registerName("startSignPickup:success:failed:");
-    if ([presenter respondsToSelector:sel]) {
-        ((void (*)(id, SEL, id, id, id))objc_msgSend)(presenter, sel, nil, blockRef, blockRef);
-        NSLog(@"[grab] 已发起抢单请求: %@", freightNo);
+static void PrunePushIds(void) {
+    @synchronized (gPushIds) {
+        if (!gPushIds) return;
+        NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+        NSMutableArray *drop = [NSMutableArray array];
+        for (NSString *k in gPushIds) {
+            if (now - gPushIds[k].doubleValue > kPushTTL) [drop addObject:k];
+        }
+        if (drop.count) [gPushIds removeObjectsForKeys:drop];
     }
 }
 
+// ===== 抢单 =====
+static void DoGrab(id order, NSString *freightNo) {
+    Class P = objc_getClass("HLLOrderPickupPresenter");
+    if (!P) { L(@"找不到 HLLOrderPickupPresenter"); return; }
+
+    SEL initSel = sel_registerName("initWithOrder:");
+    if (![P instancesRespondToSelector:initSel]) { L(@"Presenter 无 initWithOrder:"); return; }
+    id presenter = ((id (*)(id, SEL, id))objc_msgSend)([P alloc], initSel, order);
+    if (!presenter) { L(@"presenter init 失败"); return; }
+
+    SEL sel = sel_registerName("startSignPickup:success:failed:");
+    if (![presenter respondsToSelector:sel]) { L(@"Presenter 无 startSignPickup"); return; }
+
+    __block BOOL done = NO;
+    void (^ok)(id) = ^(id resp) {
+        if (done) return; done = YES;
+        os_unfair_lock_lock(&gLockObj); gGrabbing = NO; os_unfair_lock_unlock(&gLockObj);
+        L(@"抢单成功 %@ resp=%@", freightNo, resp);
+    };
+    void (^fail)(id) = ^(id err) {
+        if (done) return; done = YES;
+        os_unfair_lock_lock(&gLockObj); gGrabbing = NO; os_unfair_lock_unlock(&gLockObj);
+        L(@"抢单失败 %@ err=%@", freightNo, err);
+    };
+
+    L(@"发起抢单 %@", freightNo);
+    ((void (*)(id, SEL, id, id, id))objc_msgSend)(presenter, sel, order, [ok copy], [fail copy]);
+}
+
+// ===== Hooks =====
 %hook HLLHallOrderProvider
+
 - (void)orderNewBatchPushTask:(id)task {
     %orig;
     @try {
         id params = SafeValue(task, @"params");
-        id data = SafeValue(params, @"data");
-        id fre = SafeValue(data, @"freight_no");
+        id data   = SafeValue(params, @"data");
+        id fre    = SafeValue(data, @"freight_no");
         if (fre) {
-            if (!gPushIds) gPushIds = [NSMutableSet new];
-            [gPushIds addObject:[fre description]];
-            NSLog(@"[grab] ★收到推送★: %@", fre);
+            NSString *key = [fre description];
+            @synchronized (gPushIds ?: (gPushIds = [NSMutableDictionary new])) {
+                gPushIds[key] = @([[NSDate date] timeIntervalSince1970]);
+            }
+            PrunePushIds();
+            L(@"收到推送 %@", key);
+        } else {
+            L(@"推送解析失败 task=%@", task);
         }
-    } @catch (NSException *e) {}
+    } @catch (NSException *e) { L(@"push 异常 %@", e); }
 }
 
 - (id)convertOrderModelsWithJson:(id)json {
     id ret = %orig;
     @try {
-        if (![ret respondsToSelector:@selector(count)]) return ret;
-        NSUInteger cnt = ((NSUInteger (*)(id, SEL))objc_msgSend)(ret, sel_registerName("count"));
-        for (NSUInteger i = 0; i < cnt; i++) {
-            id o = ((id (*)(id, SEL, NSUInteger))objc_msgSend)(ret, sel_registerName("objectAtIndex:"), i);
-            id freObj = SafeValue(o, @"freight_no");
-            if (!freObj) continue;
-            NSString *fre = [freObj description];
-            double yuan = [SafeValue(o, @"total_fee_fen") doubleValue] / 100.0;
-            double km = [SafeValue(o, @"navigation_value") doubleValue] / 1000.0;
-            
-            // 锁死条件：金额 >= 20，距离 <= 5
-            BOOL isPush = (gPushIds && [gPushIds containsObject:fre]);
-            BOOL hit = (yuan >= 20.0 && km <= 5.0);
+        if (![ret isKindOfClass:[NSArray class]]) {
+            L(@"返回值不是 NSArray: %@", [ret class]);
+            return ret;
+        }
+        for (id o in (NSArray *)ret) {
+            @autoreleasepool {
+                id freObj = SafeValue(o, @"freight_no");
+                if (!freObj) continue;
+                NSString *fre = [freObj description];
 
-            NSLog(@"[grab] 单号:%@ 金额:%.2f元 距离:%.2fkm 达标:%d", fre, yuan, km, hit);
+                double yuan = [SafeValue(o, @"total_fee_fen") doubleValue] / 100.0;
+                double km   = [SafeValue(o, @"navigation_value") doubleValue] / 1000.0;
+                double coin = [SafeValue(o, @"coin") doubleValue]; // 金币字段名按真实改
 
-            if (isPush && hit && gLock < 1) {
-                gLock = 1;
-                NSLog(@"[grab] 🌟满足条件，开始抢单🌟 %@", fre);
-                DoGrab(o, fre);
+                BOOL isPush = NO;
+                @synchronized (gPushIds) { isPush = (gPushIds && gPushIds[fre] != nil); }
+
+                BOOL hit = gEnabled
+                        && yuan >= gMinYuan
+                        && km   <= gMaxKm
+                        && coin >= gMinCoin
+                        && (!gPushOnly || isPush);
+
+                L(@"单号:%@ 金额:%.2f 距离:%.2fkm 金币:%.0f push=%d hit=%d",
+                  fre, yuan, km, coin, isPush, hit);
+
+                if (hit) {
+                    os_unfair_lock_lock(&gLockObj);
+                    BOOL can = !gGrabbing; if (can) gGrabbing = YES;
+                    os_unfair_lock_unlock(&gLockObj);
+
+                    if (can) {
+                        @synchronized (gPushIds) { [gPushIds removeObjectForKey:fre]; }
+                        DoGrab(o, fre);
+                    } else {
+                        L(@"已有抢单进行中，跳过 %@", fre);
+                    }
+                }
             }
         }
-    } @catch (NSException *e) {}
+    } @catch (NSException *e) { L(@"convert 异常 %@", e); }
     return ret;
 }
+
 %end
