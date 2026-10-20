@@ -4,8 +4,16 @@
 #import <objc/runtime.h>
 
 #define kPrefsPath @"/var/mobile/Library/Preferences/com.yourname.grab.plist"
-static double GetMinFee() { NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; return d[@"minFee"] ? [d[@"minFee"] doubleValue] : 20.0; }
-static double GetMaxDist() { NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; return d[@"maxDist"] ? [d[@"maxDist"] doubleValue] : 5.0; }
+
+static double GetMinFee() { 
+    NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; 
+    return d[@"minFee"] ? [d[@"minFee"] doubleValue] : 20.0; 
+}
+
+static double GetMaxDist() { 
+    NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; 
+    return d[@"maxDist"] ? [d[@"maxDist"] doubleValue] : 5.0; 
+}
 
 static NSMutableSet *gPushIds = nil;
 static int gLock = 0;
@@ -28,26 +36,33 @@ static id SafeValue(id obj, NSString *key) {
             #pragma clang diagnostic pop
         }
         return [obj valueForKey:key];
-    } @catch (__unused NSException *e) { return nil; }
+    } @catch (__unused NSException *e) {
+        return nil;
+    }
 }
 
 static void DoGrab(id order, NSString *freightNo) {
     Class P = objc_getClass("HLLOrderPickupPresenter");
-    if (!P) return;
+    if (!P) { return; }
     id presenter = ((id (*)(id, SEL, id))objc_msgSend)([P alloc], sel_registerName("initWithOrder:"), order);
-    if (!presenter) return;
+    if (!presenter) { return; }
 
     __block id blockRef = nil;
-    void (^cb)(id) = ^(id resp) { gLock = 0; blockRef = nil; };
+    void (^cb)(id) = ^(id resp) {
+        gLock = 0;
+        blockRef = nil;
+    };
     blockRef = [cb copy];
 
     SEL sel = sel_registerName("startSignPickup:success:failed:");
     if ([presenter respondsToSelector:sel]) {
         ((void (*)(id, SEL, id, id, id))objc_msgSend)(presenter, sel, nil, blockRef, blockRef);
+        NSLog(@"[grab] 已发起抢单 %@", freightNo);
     }
 }
 
 %hook HLLHallOrderProvider
+
 - (void)orderNewBatchPushTask:(id)task {
     %orig;
     @try {
@@ -57,6 +72,7 @@ static void DoGrab(id order, NSString *freightNo) {
         if (fre) {
             if (!gPushIds) gPushIds = [NSMutableSet new];
             [gPushIds addObject:[fre description]];
+            NSLog(@"[grab] 【推送】%@", fre);
         }
     } @catch (NSException *e) {}
 }
@@ -71,13 +87,16 @@ static void DoGrab(id order, NSString *freightNo) {
             id freObj = SafeValue(o, @"freight_no");
             if (!freObj) continue;
             NSString *fre = [freObj description];
+
             double yuan = [SafeValue(o, @"total_fee_fen") doubleValue] / 100.0;
             double km = [SafeValue(o, @"navigation_value") doubleValue] / 1000.0;
+
             BOOL isPush = (gPushIds && [gPushIds containsObject:fre]);
             BOOL hit = (yuan >= GetMinFee() && km <= GetMaxDist());
 
             if (isPush && hit && gLock < 1) {
                 gLock = 1;
+                NSLog(@"[grab] ★★★ 抢单 %@", fre);
                 DoGrab(o, fre);
             }
         }
