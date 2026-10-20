@@ -5,6 +5,7 @@
 #import <Preferences/PSListController.h>
 #import <Preferences/PSSpecifier.h>
 
+// ======= 你的配置 =======
 #define kPrefsPath @"/var/mobile/Library/Preferences/com.yourname.grab.plist"
 static double GetMinFee() { NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; return d[@"minFee"] ? [d[@"minFee"] doubleValue] : 20.0; }
 static double GetMaxDist() { NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; return d[@"maxDist"] ? [d[@"maxDist"] doubleValue] : 5.0; }
@@ -92,7 +93,7 @@ static void DoGrab(id order, NSString *freightNo) {
 }
 %end
 
-// ======= 简单无错的界面代码 =======
+// ======= 极简界面 =======
 @interface GrabPrefsRootListController : PSListController
 @end
 @implementation GrabPrefsRootListController
@@ -101,15 +102,15 @@ static void DoGrab(id order, NSString *freightNo) {
         NSMutableArray *specs = [NSMutableArray array];
         
         PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"自动抢单设置"];
-        [group setProperty:@"修改后自动保存并生效，不用重启桌面。" forKey:@"footerText"];
+        [group setProperty:@"默认 20元 / 5km。" forKey:@"footerText"];
         [specs addObject:group];
         
-        PSSpecifier *fee = [PSSpecifier preferenceSpecifierNamed:@"最低金额 (元)" target:self set:@selector(setPreferenceValue:specifier:) get:@selector(readPreferenceValue:) detail:nil cell:PSListItemCell edit:nil];
+        PSSpecifier *fee = [PSSpecifier preferenceSpecifierNamed:@"金额 (元)" target:self set:@selector(setPref:) get:@selector(getPref:) detail:nil cell:PSListItemCell edit:nil];
         [fee setProperty:@"minFee" forKey:@"key"];
         [fee setProperty:@YES forKey:@"isNumeric"];
         [specs addObject:fee];
 
-        PSSpecifier *dist = [PSSpecifier preferenceSpecifierNamed:@"最远距离 (km)" target:self set:@selector(setPreferenceValue:specifier:) get:@selector(readPreferenceValue:) detail:nil cell:PSListItemCell edit:nil];
+        PSSpecifier *dist = [PSSpecifier preferenceSpecifierNamed:@"距离 (km)" target:self set:@selector(setPref:) get:@selector(getPref:) detail:nil cell:PSListItemCell edit:nil];
         [dist setProperty:@"maxDist" forKey:@"key"];
         [dist setProperty:@YES forKey:@"isNumeric"];
         [specs addObject:dist];
@@ -118,17 +119,13 @@ static void DoGrab(id order, NSString *freightNo) {
     }
     return _specifiers;
 }
-- (id)readPreferenceValue:(PSSpecifier*)specifier {
+- (id)getPref:(PSSpecifier*)specifier {
     NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath];
     id val = prefs[[specifier propertyForKey:@"key"]];
     if (val) return val;
-    if ([[specifier propertyForKey:@"key"] isEqualToString:@"minFee"]) {
-        return @20;
-    } else {
-        return @5;
-    }
+    return [[specifier propertyForKey:@"key"] isEqualToString:@"minFee"] ? @20 : @5;
 }
-- (void)setPreferenceValue:(id)value specifier:(PSSpecifier*)specifier {
+- (void)setPref:(id)value specifier:(PSSpecifier*)specifier {
     NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:kPrefsPath];
     if (!prefs) prefs = [NSMutableDictionary dictionary];
     prefs[[specifier propertyForKey:@"key"]] = value;
