@@ -9,4 +9,7 @@ grab_FILES := Tweak.xm
 grab_CFLAGS := -fobjc-arc -Wno-deprecated-declarations
 grab_FRAMEWORKS := Foundation UIKit
 
+SUBPROJECTS += prefs
+
 include $(THEOS_MAKE_PATH)/tweak.mk
+include $(THEOS_MAKE_PATH)/aggregate.mk
