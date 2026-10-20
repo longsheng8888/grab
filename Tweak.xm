@@ -92,7 +92,7 @@ static void DoGrab(id order, NSString *freightNo) {
 }
 %end
 
-// ======= 设置界面代码 =======
+// ======= 界面代码：完美修复版 =======
 @interface GrabPrefsListController : PSListController
 @end
 @implementation GrabPrefsListController
@@ -136,6 +136,7 @@ static void DoGrab(id order, NSString *freightNo) {
         [specs addObject:group];
         
         GrabPrefsListController *vc = [[GrabPrefsListController alloc] init];
+        // 修复报错：传 Class 而不是对象
         PSSpecifier *link = [PSSpecifier preferenceSpecifierNamed:@"修改条件" target:self set:nil get:nil detail:[vc class] cell:PSLinkListCell edit:nil];
         [specs addObject:link];
         _specifiers = specs;
@@ -147,10 +148,10 @@ static void DoGrab(id order, NSString *freightNo) {
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"应用" style:UIBarButtonItemStyleDone target:self action:@selector(applyPrefs)];
 }
 - (void)applyPrefs {
-    // 安全重启桌面的方式（解决 system 不可用报错）
+    // 修复报错：苹果禁止用 system 杀桌面，改用官方底层 API 重启桌面
     Class FBSS = objc_getClass("FBSSystemService");
     if (FBSS) {
-        id service = ((id (*)(id, SEL))objc_msgSend)([FBSS sharedService], sel_registerName("sharedService"));
+        id service = ((id (*)(id, SEL))objc_msgSend)([FBSS class], sel_registerName("sharedService"));
         if ([service respondsToSelector:sel_registerName("terminateApplication:forReason:andExit:withContext:")]) {
             ((void (*)(id, SEL, NSString *, int, BOOL, id))objc_msgSend)(service, sel_registerName("terminateApplication:forReason:andExit:withContext:"), @"com.apple.springboard", 0, YES, nil);
         }
