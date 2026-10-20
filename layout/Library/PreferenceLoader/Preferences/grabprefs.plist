@@ -1,8 +1,0 @@
-{
-    entry = {
-        bundle = "grabprefs";
-        cell = PSLinkCell;
-        detail = "GrabPrefsRootListController";
-        label = "小龙生自动抢单";
-    };
-}
