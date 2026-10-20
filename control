@@ -4,6 +4,6 @@ Version: 1.0.0
 Architecture: iphoneos-arm64
 Description: 货拉拉司机端自动抢单
 Maintainer: you
-Author: you
+Author: 小龙生
 Section: Tweaks
 Depends: mobilesubstrate, preferenceloader
