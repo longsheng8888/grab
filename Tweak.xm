@@ -2,8 +2,6 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
-#import <Preferences/PSListController.h>
-#import <Preferences/PSSpecifier.h>
 
 #define kPrefsPath @"/var/mobile/Library/Preferences/com.yourname.grab.plist"
 static double GetMinFee() { NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; return d[@"minFee"] ? [d[@"minFee"] doubleValue] : 20.0; }
@@ -17,17 +15,11 @@ static id SafeValue(id obj, NSString *key) {
     @try {
         SEL sel = NSSelectorFromString([key stringByAppendingString:@":"]);
         if ([obj respondsToSelector:sel]) {
-            #pragma clang diagnostic push
-            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
             return [obj performSelector:sel withObject:nil];
-            #pragma clang diagnostic pop
         }
         SEL sel2 = NSSelectorFromString([key stringByAppendingString:@"_"]);
         if ([obj respondsToSelector:sel2]) {
-            #pragma clang diagnostic push
-            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
             return [obj performSelector:sel2];
-            #pragma clang diagnostic pop
         }
         return [obj valueForKey:key];
     } @catch (__unused NSException *e) { return nil; }
@@ -46,7 +38,6 @@ static void DoGrab(id order, NSString *freightNo) {
     SEL sel = sel_registerName("startSignPickup:success:failed:");
     if ([presenter respondsToSelector:sel]) {
         ((void (*)(id, SEL, id, id, id))objc_msgSend)(presenter, sel, nil, blockRef, blockRef);
-        NSLog(@"[grab] 抢单成功 %@", freightNo);
     }
 }
 
@@ -60,7 +51,6 @@ static void DoGrab(id order, NSString *freightNo) {
         if (fre) {
             if (!gPushIds) gPushIds = [NSMutableSet new];
             [gPushIds addObject:[fre description]];
-            NSLog(@"[grab] 收到推送: %@", fre);
         }
     } @catch (NSException *e) {}
 }
@@ -80,8 +70,6 @@ static void DoGrab(id order, NSString *freightNo) {
             BOOL isPush = (gPushIds && [gPushIds containsObject:fre]);
             BOOL hit = (yuan >= GetMinFee() && km <= GetMaxDist());
 
-            NSLog(@"[grab] 单号:%@ 金额:%.2f元 距离:%.2fkm 达标:%d", fre, yuan, km, hit);
-
             if (isPush && hit && gLock < 1) {
                 gLock = 1;
                 DoGrab(o, fre);
@@ -91,70 +79,3 @@ static void DoGrab(id order, NSString *freightNo) {
     return ret;
 }
 %end
-
-// ======= 界面代码：完美修复版 =======
-@interface GrabPrefsListController : PSListController
-@end
-@implementation GrabPrefsListController
-- (id)specifiers {
-    if(_specifiers == nil) {
-        NSMutableArray *specs = [NSMutableArray array];
-        PSSpecifier *fee = [PSSpecifier preferenceSpecifierNamed:@"最低金额 (元)" target:self set:@selector(setPreferenceValue:specifier:) get:@selector(readPreferenceValue:) detail:nil cell:PSListItemCell edit:nil];
-        [fee setProperty:@"minFee" forKey:@"key"];
-        [fee setProperty:@YES forKey:@"isNumeric"];
-        [specs addObject:fee];
-
-        PSSpecifier *dist = [PSSpecifier preferenceSpecifierNamed:@"最远距离 (km)" target:self set:@selector(setPreferenceValue:specifier:) get:@selector(readPreferenceValue:) detail:nil cell:PSListItemCell edit:nil];
-        [dist setProperty:@"maxDist" forKey:@"key"];
-        [dist setProperty:@YES forKey:@"isNumeric"];
-        [specs addObject:dist];
-        _specifiers = specs;
-    }
-    return _specifiers;
-}
-- (id)readPreferenceValue:(PSSpecifier*)specifier {
-    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath];
-    id val = prefs[[specifier propertyForKey:@"key"]];
-    if (val) return val;
-    return [[specifier propertyForKey:@"key"] isEqualToString:@"minFee"] ? @20 : @5;
-}
-- (void)setPreferenceValue:(id)value specifier:(PSSpecifier*)specifier {
-    NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:kPrefsPath] ?: [NSMutableDictionary dictionary];
-    prefs[[specifier propertyForKey:@"key"]] = value;
-    [prefs writeToFile:kPrefsPath atomically:YES];
-}
-@end
-
-@interface GrabPrefsRootListController : PSListController
-@end
-@implementation GrabPrefsRootListController
-- (id)specifiers {
-    if(_specifiers == nil) {
-        NSMutableArray *specs = [NSMutableArray array];
-        PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"自动抢单设置"];
-        [group setProperty:@"默认20元，5公里。修改后点击右上角应用。" forKey:@"footerText"];
-        [specs addObject:group];
-        
-        GrabPrefsListController *vc = [[GrabPrefsListController alloc] init];
-        // 修复报错：传 Class 而不是对象
-        PSSpecifier *link = [PSSpecifier preferenceSpecifierNamed:@"修改条件" target:self set:nil get:nil detail:[vc class] cell:PSLinkListCell edit:nil];
-        [specs addObject:link];
-        _specifiers = specs;
-    }
-    return _specifiers;
-}
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"应用" style:UIBarButtonItemStyleDone target:self action:@selector(applyPrefs)];
-}
-- (void)applyPrefs {
-    // 修复报错：苹果禁止用 system 杀桌面，改用官方底层 API 重启桌面
-    Class FBSS = objc_getClass("FBSSystemService");
-    if (FBSS) {
-        id service = ((id (*)(id, SEL))objc_msgSend)([FBSS class], sel_registerName("sharedService"));
-        if ([service respondsToSelector:sel_registerName("terminateApplication:forReason:andExit:withContext:")]) {
-            ((void (*)(id, SEL, NSString *, int, BOOL, id))objc_msgSend)(service, sel_registerName("terminateApplication:forReason:andExit:withContext:"), @"com.apple.springboard", 0, YES, nil);
-        }
-    }
-}
-@end
