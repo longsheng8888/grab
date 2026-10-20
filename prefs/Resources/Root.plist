@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>items</key>
+    <array>
+
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>总开关</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>启用自动抢单</string>
+            <key>key</key><string>enabled</string>
+            <key>default</key><true/>
+        </dict>
+
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>抢单条件（同时满足）</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string>
+            <key>label</key><string>最低金额（元）</string>
+            <key>key</key><string>minYuan</string>
+            <key>default</key><string>20</string>
+            <key>keyboard</key><string>NumberPad</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string>
+            <key>label</key><string>最远距离（公里）</string>
+            <key>key</key><string>maxKm</string>
+            <key>default</key><string>5</string>
+            <key>keyboard</key><string>NumberPad</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string>
+            <key>label</key><string>最低金币</string>
+            <key>key</key><string>minCoin</string>
+            <key>default</key><string>0</string>
+            <key>keyboard</key><string>NumberPad</string>
+        </dict>
+
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>行为</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>仅抢推送单</string>
+            <key>key</key><string>pushOnly</string>
+            <key>default</key><true/>
+        </dict>
+
+    </array>
+</dict>
+</plist>
