@@ -115,7 +115,8 @@ static void DoGrab(id order, NSString *freightNo) {
 - (id)readPreferenceValue:(PSSpecifier*)specifier {
     NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath];
     id val = prefs[[specifier propertyForKey:@"key"]];
-    return val ? val : ([specifier propertyForKey:@"key"] isEqualToString:@"minFee"] ? @20 : @5);
+    if (val) return val;
+    return [[specifier propertyForKey:@"key"] isEqualToString:@"minFee"] ? @20 : @5;
 }
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier*)specifier {
     NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:kPrefsPath] ?: [NSMutableDictionary dictionary];
@@ -133,8 +134,9 @@ static void DoGrab(id order, NSString *freightNo) {
         PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"自动抢单设置"];
         [group setProperty:@"默认20元，5公里。修改后点击右上角应用。" forKey:@"footerText"];
         [specs addObject:group];
+        
         GrabPrefsListController *vc = [[GrabPrefsListController alloc] init];
-        PSSpecifier *link = [PSSpecifier preferenceSpecifierNamed:@"修改条件" target:self set:nil get:nil detail:vc cell:PSLinkListCell edit:nil];
+        PSSpecifier *link = [PSSpecifier preferenceSpecifierNamed:@"修改条件" target:self set:nil get:nil detail:[vc class] cell:PSLinkListCell edit:nil];
         [specs addObject:link];
         _specifiers = specs;
     }
@@ -145,6 +147,13 @@ static void DoGrab(id order, NSString *freightNo) {
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"应用" style:UIBarButtonItemStyleDone target:self action:@selector(applyPrefs)];
 }
 - (void)applyPrefs {
-    system("killall -9 SpringBoard");
+    // 安全重启桌面的方式（解决 system 不可用报错）
+    Class FBSS = objc_getClass("FBSSystemService");
+    if (FBSS) {
+        id service = ((id (*)(id, SEL))objc_msgSend)([FBSS sharedService], sel_registerName("sharedService"));
+        if ([service respondsToSelector:sel_registerName("terminateApplication:forReason:andExit:withContext:")]) {
+            ((void (*)(id, SEL, NSString *, int, BOOL, id))objc_msgSend)(service, sel_registerName("terminateApplication:forReason:andExit:withContext:"), @"com.apple.springboard", 0, YES, nil);
+        }
+    }
 }
 @end
