@@ -1,5 +1,5 @@
-TARGET := iphone:clang:latest:14.0
-ARCHS := arm64 arm64e
+目标 := iphone:clang:latest:14.0
+包含 $(THEOS_MAKE_PATH)/tweak.mk
 THEOS_PACKAGE_SCHEME = roothide
 
 include $(THEOS)/makefiles/common.mk
