@@ -1,12 +1,11 @@
 #import "GrabPrefsRootListController.h"
-#import <Preferences/PSSpecifier.h>
 
 #define PREFS_NOTIFY "com.yourname.grab.prefs.changed"
 
 @implementation GrabPrefsRootListController
 
 - (NSArray *)specifiers {
-    if (!_specifiers) {
+    if (_specifiers == nil) {
         _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
     }
     return _specifiers;
