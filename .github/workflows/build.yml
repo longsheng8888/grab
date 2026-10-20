@@ -30,6 +30,7 @@ jobs:
         run: |
           export THEOS=$HOME/theos
           export PATH=$THEOS/bin:/opt/homebrew/bin:/usr/local/bin:$PATH
+          export SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
           make clean || true
           make package
 
