@@ -3,10 +3,17 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
-// 默认抢单设置
 #define kPrefsPath @"/var/mobile/Library/Preferences/com.yourname.grab.plist"
-static double GetMinFee() { NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; return d[@"minFee"] ? [d[@"minFee"] doubleValue] : 20.0; }
-static double GetMaxDist() { NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; return d[@"maxDist"] ? [d[@"maxDist"] doubleValue] : 5.0; }
+
+static double GetMinFee() { 
+    NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; 
+    return d[@"minFee"] ? [d[@"minFee"] doubleValue] : 20.0; 
+}
+
+static double GetMaxDist() { 
+    NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; 
+    return d[@"maxDist"] ? [d[@"maxDist"] doubleValue] : 5.0; 
+}
 
 static NSMutableSet *gPushIds = nil;
 static int gLock = 0;
@@ -55,6 +62,7 @@ static void DoGrab(id order, NSString *freightNo) {
 }
 
 %hook HLLHallOrderProvider
+
 - (void)orderNewBatchPushTask:(id)task {
     %orig;
     @try {
