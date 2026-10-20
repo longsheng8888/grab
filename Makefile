@@ -6,11 +6,10 @@ INSTALL_TARGET_PROCESSES := 货拉拉司机端
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME := grab
-grab_FILES := Tweak.xm grabprefs.mm
+grab_FILES := Tweak.xm
 grab_CFLAGS := -fobjc-arc -Wno-deprecated-declarations
 grab_FRAMEWORKS := Foundation UIKit Preferences
 grab_PRIVATE_FRAMEWORKS := Preferences
-grab_INSTALL_PATH := /Library/MobileSubstrate/DynamicLibraries
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
@@ -18,6 +17,6 @@ BUNDLE_NAME := grabprefs
 grabprefs_INSTALL_PATH := /Library/PreferenceBundles
 grabprefs_FRAMEWORKS := Foundation UIKit Preferences
 grabprefs_PRIVATE_FRAMEWORKS := Preferences
-grabprefs_FILES := grabprefs.mm
+grabprefs_FILES := Tweak.xm
 
 include $(THEOS_MAKE_PATH)/bundle.mk
