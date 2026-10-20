@@ -10,8 +10,9 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Theos
+      - name: Install Theos & ldid
         run: |
+          brew install ldid
           export THEOS=$HOME/theos
           git clone --recursive https://github.com/roothide/theos.git $THEOS
 
@@ -28,7 +29,7 @@ jobs:
       - name: Build
         run: |
           export THEOS=$HOME/theos
-          export PATH=$THEOS/bin:$PATH
+          export PATH=$THEOS/bin:/opt/homebrew/bin:/usr/local/bin:$PATH
           make clean || true
           make package
 
