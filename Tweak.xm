@@ -3,8 +3,9 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
-static const double kMinFeeYuan = 7.0;
-static const double kMaxDistKm  = 5.0;
+#define kPrefsPath @"/var/mobile/Library/Preferences/com.yourname.grab.plist"
+static double GetMinFee() { NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; return d[@"minFee"] ? [d[@"minFee"] doubleValue] : 20.0; }
+static double GetMaxDist() { NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; return d[@"maxDist"] ? [d[@"maxDist"] doubleValue] : 5.0; }
 
 static NSMutableSet *gPushIds = nil;
 static int gLock = 0;
@@ -92,7 +93,7 @@ static void DoGrab(id order, NSString *freightNo) {
             double km = meter / 1000.0;
 
             BOOL isPush = (gPushIds && [gPushIds containsObject:fre]);
-            BOOL hit = (yuan >= kMinFeeYuan && km <= kMaxDistKm);
+            BOOL hit = (yuan >= GetMinFee() && km <= GetMaxDist());
 
             NSLog(@"[grab] %@%@ %@ | %.2f元 | %.2fkm",
                   isPush ? @"[推送单]" : @"        ",
