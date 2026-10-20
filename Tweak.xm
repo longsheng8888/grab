@@ -2,6 +2,7 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <os/lock.h>
 
 // ===== 偏好 =====
 #define PREFS_DOMAIN  "com.yourname.grab"
@@ -26,7 +27,6 @@ static inline void L(NSString *fmt, ...) {
 }
 
 static NSString *PrefsPath(void) {
-    // roothide 越狱路径在 /var/mobile/Library/Preferences/ 下，App 沙盒内可读
     return [NSString stringWithFormat:@"/var/mobile/Library/Preferences/%s.plist", PREFS_DOMAIN];
 }
 
@@ -43,8 +43,9 @@ static void ReloadPrefs(void) {
       gEnabled, gPushOnly, gMinYuan, gMaxKm, gMinCoin);
 }
 
-static void PrefsChangedCB(CFNotificationCenterRef c, CFStringRef n, const void *o,
-                           CFStringRef nm, const void *i) {
+// 修正了这里的回调签名
+static void PrefsChangedCB(CFNotificationCenterRef c, void *o,
+                           CFStringRef n, const void *obj, CFDictionaryRef info) {
     ReloadPrefs();
 }
 
