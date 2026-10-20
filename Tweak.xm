@@ -2,7 +2,10 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <Preferences/PSListController.h>
+#import <Preferences/PSSpecifier.h>
 
+// ======= 动态设置 =======
 #define kPrefsPath @"/var/mobile/Library/Preferences/com.yourname.grab.plist"
 static double GetMinFee() { NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; return d[@"minFee"] ? [d[@"minFee"] doubleValue] : 20.0; }
 static double GetMaxDist() { NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath]; return d[@"maxDist"] ? [d[@"maxDist"] doubleValue] : 5.0; }
@@ -36,8 +39,7 @@ static id SafeValue(id obj, NSString *key) {
 static void DoGrab(id order, NSString *freightNo) {
     Class P = objc_getClass("HLLOrderPickupPresenter");
     if (!P) { NSLog(@"[grab] no HLLOrderPickupPresenter"); return; }
-    id presenter = ((id (*)(id, SEL, id))objc_msgSend)(
-        [P alloc], sel_registerName("initWithOrder:"), order);
+    id presenter = ((id (*)(id, SEL, id))objc_msgSend)([P alloc], sel_registerName("initWithOrder:"), order);
     if (!presenter) { NSLog(@"[grab] presenter nil for %@", freightNo); return; }
 
     __block id blockRef = nil;
@@ -50,16 +52,13 @@ static void DoGrab(id order, NSString *freightNo) {
 
     SEL sel = sel_registerName("startSignPickup:success:failed:");
     if ([presenter respondsToSelector:sel]) {
-        ((void (*)(id, SEL, id, id, id))objc_msgSend)(
-            presenter, sel, nil, blockRef, blockRef);
+        ((void (*)(id, SEL, id, id, id))objc_msgSend)(presenter, sel, nil, blockRef, blockRef);
         NSLog(@"[grab] 已发起抢单 %@", freightNo);
-    } else {
-        NSLog(@"[grab] presenter 无 startSignPickup");
     }
 }
 
+// ======= 主功能注入 =======
 %hook HLLHallOrderProvider
-
 - (void)orderNewBatchPushTask:(id)task {
     %orig;
     @try {
@@ -71,9 +70,7 @@ static void DoGrab(id order, NSString *freightNo) {
             [gPushIds addObject:[fre description]];
             NSLog(@"[grab] 【推送】%@", fre);
         }
-    } @catch (NSException *e) {
-        NSLog(@"[grab] push err %@", e);
-    }
+    } @catch (NSException *e) {}
 }
 
 - (id)convertOrderModelsWithJson:(id)json {
@@ -87,18 +84,13 @@ static void DoGrab(id order, NSString *freightNo) {
             if (!freObj) continue;
             NSString *fre = [freObj description];
 
-            double fen  = [SafeValue(o, @"total_fee_fen") doubleValue];
-            double yuan = fen / 100.0;
-            double meter = [SafeValue(o, @"navigation_value") doubleValue];
-            double km = meter / 1000.0;
+            double yuan = [SafeValue(o, @"total_fee_fen") doubleValue] / 100.0;
+            double km = [SafeValue(o, @"navigation_value") doubleValue] / 1000.0;
 
             BOOL isPush = (gPushIds && [gPushIds containsObject:fre]);
             BOOL hit = (yuan >= GetMinFee() && km <= GetMaxDist());
 
-            NSLog(@"[grab] %@%@ %@ | %.2f元 | %.2fkm",
-                  isPush ? @"[推送单]" : @"        ",
-                  hit ? @"【达标】" : @"      ",
-                  fre, yuan, km);
+            NSLog(@"[grab] %@%@ %@ | %.2f元 | %.2fkm", isPush ? @"[推送]" : @"", hit ? @"[达标]" : @"", fre, yuan, km);
 
             if (isPush && hit && gLock < 1) {
                 gLock = 1;
@@ -106,10 +98,65 @@ static void DoGrab(id order, NSString *freightNo) {
                 DoGrab(o, fre);
             }
         }
-    } @catch (NSException *e) {
-        NSLog(@"[grab] convert err %@", e);
-    }
+    } @catch (NSException *e) {}
     return ret;
 }
-
 %end
+
+// ======= 手机设置界面 =======
+@interface GrabPrefsListController : PSListController
+@end
+@implementation GrabPrefsListController
+- (id)specifiers {
+    if(_specifiers == nil) {
+        NSMutableArray *specs = [NSMutableArray array];
+        PSSpecifier *fee = [PSSpecifier preferenceSpecifierNamed:@"最低金额 (元)" target:self set:@selector(setPreferenceValue:specifier:) get:@selector(readPreferenceValue:) detail:nil cell:PSListItemCell edit:nil];
+        [fee setProperty:@"minFee" forKey:@"key"];
+        [fee setProperty:@YES forKey:@"isNumeric"];
+        [specs addObject:fee];
+
+        PSSpecifier *dist = [PSSpecifier preferenceSpecifierNamed:@"最远距离 (km)" target:self set:@selector(setPreferenceValue:specifier:) get:@selector(readPreferenceValue:) detail:nil cell:PSListItemCell edit:nil];
+        [dist setProperty:@"maxDist" forKey:@"key"];
+        [dist setProperty:@YES forKey:@"isNumeric"];
+        [specs addObject:dist];
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+- (id)readPreferenceValue:(PSSpecifier*)specifier {
+    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath];
+    id val = prefs[[specifier propertyForKey:@"key"]];
+    return val ? val : ([specifier propertyForKey:@"key"] isEqualToString:@"minFee"] ? @20 : @5);
+}
+- (void)setPreferenceValue:(id)value specifier:(PSSpecifier*)specifier {
+    NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:kPrefsPath] ?: [NSMutableDictionary dictionary];
+    prefs[[specifier propertyForKey:@"key"]] = value;
+    [prefs writeToFile:kPrefsPath atomically:YES];
+}
+@end
+
+@interface GrabPrefsRootListController : PSListController
+@end
+@implementation GrabPrefsRootListController
+- (id)specifiers {
+    if(_specifiers == nil) {
+        NSMutableArray *specs = [NSMutableArray array];
+        PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"自动抢单设置"];
+        [group setProperty:@"默认最低20元，最远5公里。修改后点击右上角应用。" forKey:@"footerText"];
+        [specs addObject:group];
+        
+        GrabPrefsListController *vc = [[GrabPrefsListController alloc] init];
+        PSSpecifier *link = [PSSpecifier preferenceSpecifierNamed:@"修改抢单条件" target:self set:nil get:nil detail:vc cell:PSLinkListCell edit:nil];
+        [specs addObject:link];
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"应用" style:UIBarButtonItemStyleDone target:self action:@selector(applyPrefs)];
+}
+- (void)applyPrefs {
+    system("killall -9 SpringBoard");
+}
+@end
