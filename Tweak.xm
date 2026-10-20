@@ -15,11 +15,17 @@ static id SafeValue(id obj, NSString *key) {
     @try {
         SEL sel = NSSelectorFromString([key stringByAppendingString:@":"]);
         if ([obj respondsToSelector:sel]) {
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
             return [obj performSelector:sel withObject:nil];
+            #pragma clang diagnostic pop
         }
         SEL sel2 = NSSelectorFromString([key stringByAppendingString:@"_"]);
         if ([obj respondsToSelector:sel2]) {
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
             return [obj performSelector:sel2];
+            #pragma clang diagnostic pop
         }
         return [obj valueForKey:key];
     } @catch (__unused NSException *e) { return nil; }
