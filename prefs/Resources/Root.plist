@@ -8,13 +8,13 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>自动抢单设置</string>
+			<string>自动抢单</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
-			<string>启用自动抢单</string>
+			<string>启用</string>
 			<key>key</key>
 			<string>enabled</string>
 			<key>default</key>
@@ -24,7 +24,7 @@
 			<key>cell</key>
 			<string>PSEditTextCell</string>
 			<key>label</key>
-			<string>最低金额（元）</string>
+			<string>金额</string>
 			<key>key</key>
 			<string>minYuan</string>
 			<key>default</key>
@@ -32,20 +32,8 @@
 			<key>keyboard</key>
 			<string>NumberPad</string>
 		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSEditTextCell</string>
-			<key>label</key>
-			<string>最远距离（公里）</string>
-			<key>key</key>
-			<string>maxKm</string>
-			<key>default</key>
-			<string>5</string>
-			<key>keyboard</key>
-			<string>NumberPad</string>
-		</dict>
 	</array>
 	<key>title</key>
-	<string>小龙生抢单</string>
+	<string>设置</string>
 </dict>
 </plist>
