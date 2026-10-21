@@ -1,5 +1,6 @@
 #import "GrabPrefsRootListController.h"
 
+// 告诉编译器，这个类不要直接去链接系统库
 @implementation GrabPrefsRootListController
 
 - (NSArray *)specifiers {
