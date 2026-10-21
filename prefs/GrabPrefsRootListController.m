@@ -1,6 +1,13 @@
 #import "GrabPrefsRootListController.h"
 #import <objc/runtime.h>
 
+// 放在 .m 里面，不暴露给外部，就不会有重复定义的报错
+@interface GrabPrefsRootListController () {
+    NSArray *_specifiers;
+}
+- (id)loadSpecifiersFromPlistName:(NSString *)plistName target:(id)target;
+@end
+
 @implementation GrabPrefsRootListController
 
 - (NSArray *)specifiers {
