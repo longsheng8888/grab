@@ -2,11 +2,15 @@
 
 @implementation GrabPrefsRootListController
 
-- (NSArray *)specifiers {
-    if (!_specifiers) {
-        _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
-    }
-    return _specifiers;
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"小龙生自动抢单";
+    self.view.backgroundColor = [UIColor whiteColor];
+    
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(0, 100, self.view.bounds.size.width, 30)];
+    label.text = @"你好，界面加载成功了！";
+    label.textAlignment = NSTextAlignmentCenter;
+    [self.view addSubview:label];
 }
 
 @end
