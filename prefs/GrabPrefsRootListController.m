@@ -1,23 +1,10 @@
 #import "GrabPrefsRootListController.h"
-#import <objc/runtime.h>
-
-@interface GrabPrefsRootListController ()
-{
-    NSArray *_specifiers;
-}
-@end
 
 @implementation GrabPrefsRootListController
 
 - (NSArray *)specifiers {
     if (!_specifiers) {
-        SEL sel = NSSelectorFromString(@"loadSpecifiersFromPlistName:target:");
-        if ([self respondsToSelector:sel]) {
-            #pragma clang diagnostic push
-            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-            _specifiers = [self performSelector:sel withObject:@"Root" withObject:self];
-            #pragma clang diagnostic pop
-        }
+        _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
     }
     return _specifiers;
 }
