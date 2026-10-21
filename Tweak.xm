@@ -43,18 +43,26 @@ static void ReloadPrefs(void) {
       gEnabled, gPushOnly, gMinYuan, gMaxKm, gMinCoin);
 }
 
-// 修正了这里的回调签名
 static void PrefsChangedCB(CFNotificationCenterRef c, void *o,
                            CFStringRef n, const void *obj, CFDictionaryRef info) {
     ReloadPrefs();
 }
 
+// ================= 绝对防闪退的初始化 =================
 %ctor {
-    ReloadPrefs();
-    CFNotificationCenterAddObserver(
-        CFNotificationCenterGetDarwinNotifyCenter(), NULL,
-        PrefsChangedCB, CFSTR(PREFS_NOTIFY), NULL,
-        CFNotificationSuspensionBehaviorDeliverImmediately);
+    // 如果当前进程是设置 App，直接终止初始化，避免设置界面闪退！
+    NSString *processName = [[NSProcessInfo processInfo] processName];
+    if ([processName isEqualToString:@"Preferences"]) {
+        return;
+    }
+    
+    @try {
+        ReloadPrefs();
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(), NULL,
+            PrefsChangedCB, CFSTR(PREFS_NOTIFY), NULL,
+            CFNotificationSuspensionBehaviorDeliverImmediately);
+    } @catch (__unused NSException *e) {}
 }
 
 // ===== 安全取值 =====
