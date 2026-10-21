@@ -4,10 +4,5 @@ grabprefs_FRAMEWORKS = UIKit
 grabprefs_CFLAGS = -fobjc-arc
 grabprefs_INSTALL_PATH = /Library/PreferenceBundles
 
-# 加上这一句，强行告诉链接器：找不到 PSListController 也没关系，别报错！
-grabprefs_LDFLAGS = -undefined dynamic_lookup
-
 include $(THEOS)/makefiles/common.mk
 include $(THEOS_MAKE_PATH)/bundle.mk
-
-grabprefs_RESOURCE_DIRS = Resources
